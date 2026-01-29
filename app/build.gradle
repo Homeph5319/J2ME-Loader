@@ -18,37 +18,21 @@ android {
         resValue 'string', 'app_name', rootProject.name
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+		multiDexEnabled true
+    }
+
+    dexOptions {
+        javaMaxHeapSize "4g"
     }
 
     signingConfigs {
-        release {
-            if (System.getenv()['BITRISE_IO']) {
-                keyAlias System.getenv('BITRISEIO_ANDROID_KEYSTORE_ALIAS')
-                keyPassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PRIVATE_KEY_PASSWORD')
-                storeFile rootProject.file(System.getenv('BITRISEIO_ANDROID_KEYSTORE_NAME'))
-                storePassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PASSWORD')
-            } else {
-                Properties keystoreProps = new Properties()
-                keystoreProps.load(new FileInputStream(rootProject.file("keystore.properties")))
-                keyAlias keystoreProps['keyAlias']
-                keyPassword keystoreProps['keyPassword']
-                storeFile file(keystoreProps['storeFile'])
-                storePassword keystoreProps['storePassword']
-            }
+        debug {
         }
     }
 
     buildTypes {
-        release {
-            minifyEnabled true
-            shrinkResources true
-            signingConfig signingConfigs.release
-        }
         debug {
-            applicationIdSuffix '.debug'
-            jniDebuggable true
-            multiDexEnabled true
-            multiDexKeepProguard file('multidex-config.pro')
+            signingConfig signingConfigs.debug
         }
     }
 
@@ -58,29 +42,6 @@ android {
 
     flavorDimensions 'default'
     productFlavors {
-        play {
-            buildConfigField 'boolean', 'FULL_EMULATOR', 'true'
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro', 'proguard-common.pro'
-            versionNameSuffix "-play"
-        }
-        open {
-            buildConfigField 'boolean', 'FULL_EMULATOR', 'true'
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro', 'proguard-common.pro'
-            versionNameSuffix "-open"
-        }
-        fdroid {
-            buildConfigField 'boolean', 'FULL_EMULATOR', 'true'
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro', 'proguard-common.pro'
-        }
-        dev {
-            buildConfigField 'boolean', 'FULL_EMULATOR', 'true'
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro', 'proguard-common.pro'
-            versionNameSuffix "-dev-" + generateVersionCode()
-        }
         // variant dimension for create android port from J2ME app source
         midlet {
             buildConfigField 'boolean', 'FULL_EMULATOR', 'false'
