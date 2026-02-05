@@ -73,6 +73,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import io.reactivex.SingleObserver;
+import io.reactivex.schedulers.Schedulers;
 
 import io.reactivex.Observable;
 import io.reactivex.ObservableOnSubscribe;
@@ -102,6 +107,9 @@ public class AppsListFragment extends ListFragment {
 	private AppRepository appRepository;
 	private Disposable searchViewDisposable;
 
+	private boolean isRunning = false;
+	private ru.woesss.j2me.installer.Installer converter;
+
 	FragmentAppsListBinding binding;
 
 	private final ActivityResultLauncher<String> openFileLauncher = registerForActivityResult(
@@ -127,6 +135,77 @@ public class AppsListFragment extends ListFragment {
 		appRepository = appListModel.getAppRepository();
 		appRepository.observeErrors(this, this::alertDbError);
 		appRepository.observeApps(this, this::onDbUpdated);
+
+		converter = new ru.woesss.j2me.installer.Installer(requireContext());
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+
+		// 1. Exit logic: If we return here after the game was launched, close the app
+		if (isRunning) {
+			requireActivity().finishAffinity();
+			return;
+		}
+
+		// 2. Check the database for the game
+		appRepository.getAll()
+				.firstElement()
+				.subscribeOn(Schedulers.io())
+				.observeOn(AndroidSchedulers.mainThread())
+				.subscribe(items -> {
+					if (items.isEmpty()) {
+						installStandaloneGame();
+					} else {
+						launchStandaloneGame(items.get(0));
+					}
+				}, throwable -> alertDbError(throwable));
+	}
+
+	private void installStandaloneGame() {
+		try {
+			// Extract JAR from res/raw/app.jar to cache
+			File tempFile = File.createTempFile("app", ".jar", requireContext().getCacheDir());
+			try (InputStream in = getResources().openRawResource(R.raw.app);
+				 OutputStream out = new FileOutputStream(tempFile)) {
+				byte[] buffer = new byte[1024];
+				int read;
+				while ((read = in.read(buffer)) != -1) {
+					out.write(buffer, 0, read);
+				}
+			}
+
+			// Install using the new Installer API
+			converter.install(tempFile.getAbsolutePath())
+					.subscribeOn(Schedulers.computation())
+					.observeOn(AndroidSchedulers.mainThread())
+					.subscribe(new SingleObserver<String>() {
+						@Override
+						public void onSubscribe(Disposable d) {}
+
+						@Override
+						public void onSuccess(String path) {
+							AppItem app = AppUtils.getApp(path);
+							appRepository.insert(app);
+							// The observer (onDbUpdated) will handle the list update, 
+							// but we launch immediately for UX.
+							launchStandaloneGame(app);
+						}
+
+						@Override
+						public void onError(Throwable e) {
+							Toast.makeText(getActivity(), "Install Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+						}
+					});
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void launchStandaloneGame(AppItem app) {
+		isRunning = true;
+		Config.startApp(requireActivity(), app.getTitle(), app.getPathExt(), false);
 	}
 
 	@Override
